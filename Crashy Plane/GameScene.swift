@@ -1,17 +1,30 @@
 import SpriteKit
 
+//the states of the game
+enum GameState {
+    case showingLogo
+    case playing
+    case dead
+}
+
 
 class GameScene: SKScene {
     
     
+    var gameState = GameState.showingLogo
     var player: SKSpriteNode!
+    var logo: SKSpriteNode!
+    var gameOver: SKSpriteNode!
+    var backgroundMusic: SKAudioNode!
     var scoreLabel: SKLabelNode!
-
     var score = 0 {
        didSet {
            scoreLabel.text = "SCORE: \(score)"
         }
     }
+    let rockTexture = SKTexture(imageNamed: "rock")
+    var rockPhysics: SKPhysicsBody!
+    
     
     
     override func didMove(to view: SKView) {
@@ -22,15 +35,21 @@ class GameScene: SKScene {
         createGround()
         createScore()
         createPlayer()
-        startRocks()
+        createLogos()
         physicsWorld.gravity = CGVector(dx: 0.0, dy: -5.0)
         physicsWorld.contactDelegate = self //A delegate that is called when two physics bodies come in contact with each other.
+        if let musicURL = Bundle.main.url(forResource: "music", withExtension: "m4a") {
+            backgroundMusic = SKAudioNode(url: musicURL)
+            addChild(backgroundMusic)
+        }
+        rockPhysics = SKPhysicsBody(texture: rockTexture, size: rockTexture.size())
         
     }
     
     
     override func update(_ currentTime: TimeInterval) {
         
+        guard player != nil else { return }
         let value = player.physicsBody!.velocity.dy * 0.001
         let rotate = SKAction.rotate(toAngle: value, duration: 0.1)
         player.run(rotate)
@@ -40,9 +59,31 @@ class GameScene: SKScene {
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         
-        player.physicsBody?.velocity = CGVector(dx: 0, dy: 0)//makes the game more realistic
-        player.physicsBody?.applyImpulse(CGVector(dx: 0, dy: 20))//gives a push upwards
-     
+        if (gameState == .showingLogo) {
+            
+            gameState = .playing
+            let fadeOut = SKAction.fadeOut(withDuration: 0.5)
+            let activateGame = SKAction.run { [unowned self] in
+                self.player.physicsBody?.isDynamic = true
+                self.startRocks()
+            }
+            let remove = SKAction.removeFromParent()
+            let sequence = SKAction.sequence([fadeOut, activateGame, remove])
+            logo.run(sequence)
+            
+        } else if (gameState == .playing) {
+            player.physicsBody?.velocity = CGVector(dx: 0, dy: 0)//makes the game more realistic
+            player.physicsBody?.applyImpulse(CGVector(dx: 0, dy: 20))//gives a push upwards
+        } else { //gameState = .dead
+            
+            if let scene = GameScene(fileNamed: "GameScene") {
+                scene.scaleMode = .aspectFill
+                let transition = SKTransition.moveIn(with: SKTransitionDirection.right, duration: 1)
+                view?.presentScene(scene, transition: transition)
+            }
+            
+        }
+        
     }
     
     
@@ -61,11 +102,10 @@ class GameScene: SKScene {
         player.run(runForever)
         //physics
         player.physicsBody = SKPhysicsBody(texture: playerTexture, size: playerTexture.size())
-        player.physicsBody!.isDynamic = true //the physics body is moved by the physics simulation.
+        player.physicsBody!.isDynamic = false
         player.physicsBody!.contactTestBitMask = player.physicsBody!.collisionBitMask //whenever the player touches anything the contact is detected
         player.physicsBody!.collisionBitMask = 0
     
-        
     }
     
     
@@ -137,17 +177,17 @@ class GameScene: SKScene {
         topRock.zRotation = .pi
         topRock.xScale = -1.0//flip
         topRock.zPosition = -20
-        addChild(topRock)
-        topRock.physicsBody = SKPhysicsBody(texture: rockTexture, size: rockTexture.size())
+        topRock.physicsBody = rockPhysics.copy() as? SKPhysicsBody
         topRock.physicsBody!.isDynamic = false
+        addChild(topRock)
         //bottomRock
         let bottomRock = SKSpriteNode(texture: rockTexture)
         bottomRock.zPosition = -20
-        addChild(bottomRock)
-        bottomRock.physicsBody = SKPhysicsBody(texture: rockTexture, size: rockTexture.size())
+        bottomRock.physicsBody = rockPhysics.copy() as? SKPhysicsBody
         bottomRock.physicsBody!.isDynamic = false
+        addChild(bottomRock)
         //red rectangle:used to track the player's score
-        let rockCollision = SKSpriteNode(color: UIColor.red, size: CGSize(width: 32, height: frame.height))
+        let rockCollision = SKSpriteNode(color: UIColor.clear, size: CGSize(width: 32, height: frame.height))
         rockCollision.physicsBody = SKPhysicsBody(rectangleOf: rockCollision.size)//creates a rectangular physics body centered on the owning node’s origin.
         rockCollision.physicsBody!.isDynamic = false
         rockCollision.name = "scoreDetect"//to check  for collision
@@ -194,6 +234,21 @@ class GameScene: SKScene {
         addChild(scoreLabel)
         
     }
+    
+    
+    func createLogos() {
+        
+        //logo
+        logo = SKSpriteNode(imageNamed: "logo")
+        logo.position = CGPoint(x: frame.midX, y: frame.midY)
+        addChild(logo)
+        //gameOver
+        gameOver = SKSpriteNode(imageNamed: "gameover")
+        gameOver.position = CGPoint(x: frame.midX, y: frame.midY)
+        gameOver.alpha = 0
+        addChild(gameOver)
+        
+    }
    
     
     
@@ -230,8 +285,12 @@ extension GameScene: SKPhysicsContactDelegate {
             }
             let sound = SKAction.playSoundFileNamed("explosion.wav", waitForCompletion: false)
             run(sound)
+            speed = 0//no more actions in the game
+            gameOver.alpha = 1
+            backgroundMusic.run(SKAction.stop())
+            gameState = .dead
             player.removeFromParent()
-            speed = 0
+            
             
         }
         

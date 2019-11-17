@@ -17,7 +17,6 @@ class GameViewController: UIViewController {
                 view.presentScene(scene)
             }
             view.ignoresSiblingOrder = true
-            view.showsPhysics = true
         }
         
     }
@@ -27,14 +26,6 @@ class GameViewController: UIViewController {
         return true
     }
 
-    
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            return .allButUpsideDown
-        } else {
-            return .all
-        }
-    }
 
     override var prefersStatusBarHidden: Bool {
         return true
